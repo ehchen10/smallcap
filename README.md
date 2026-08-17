@@ -10,7 +10,14 @@ anything before acting on it.
 
 ```
 pip install -e ".[dev]"
+export SEC_USER_AGENT="your-project-name you@example.com"   # required — see below
 ```
+
+SEC requires a real identifying User-Agent (project name + contact email) on
+every request to its EDGAR/XBRL endpoints — see
+[SEC's developer FAQ](https://www.sec.gov/os/webmaster-faq#developers). There
+is no built-in default; commands fail with a clear error until
+`SEC_USER_AGENT` is set to your own contact info.
 
 ## Why this exists
 

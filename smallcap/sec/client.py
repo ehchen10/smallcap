@@ -40,6 +40,17 @@ class SecClientError(RuntimeError):
     """Raised for non-200 responses or malformed payloads from SEC endpoints."""
 
 
+def _require_user_agent() -> str:
+    if not CONFIG.sec_user_agent:
+        raise SecClientError(
+            "SEC_USER_AGENT is not set. SEC requires a real identifying User-Agent "
+            "(project name + a contact email) on every request — see "
+            "https://www.sec.gov/os/webmaster-faq#developers. Set your own, e.g.:\n"
+            '  export SEC_USER_AGENT="your-project-name you@example.com"'
+        )
+    return CONFIG.sec_user_agent
+
+
 def _cache_path(url: str, *, suffix: str = "json") -> Path:
     digest = hashlib.sha256(url.encode()).hexdigest()[:24]
     return SEC_CACHE_DIR / f"{digest}.{suffix}"
@@ -66,7 +77,7 @@ def _get_json(url: str, *, refresh: bool = False, ttl_seconds: int | None = None
             return json.loads(cache_file.read_text())
 
     _rate_limit()
-    resp = requests.get(url, headers={"User-Agent": CONFIG.sec_user_agent}, timeout=30)
+    resp = requests.get(url, headers={"User-Agent": _require_user_agent()}, timeout=30)
     if resp.status_code != 200:
         # Fall back to a stale cache rather than failing outright, if one exists.
         if cache_file.exists():
@@ -92,7 +103,7 @@ def _get_text(url: str, *, refresh: bool = False, ttl_seconds: int | None = None
             return cache_file.read_text(encoding="utf-8", errors="ignore")
 
     _rate_limit()
-    resp = requests.get(url, headers={"User-Agent": CONFIG.sec_user_agent}, timeout=30)
+    resp = requests.get(url, headers={"User-Agent": _require_user_agent()}, timeout=30)
     if resp.status_code != 200:
         if cache_file.exists():
             return cache_file.read_text(encoding="utf-8", errors="ignore")

@@ -22,7 +22,13 @@ NOTES_PATH = JOURNAL_DIR / "notes.jsonl"
 # SEC requires a real identifying User-Agent ("name email") on every request
 # and asks that you stay under ~10 req/s. See
 # https://www.sec.gov/os/webmaster-faq#developers
-SEC_USER_AGENT = os.environ.get("SEC_USER_AGENT", "smallcap-toolkit ehchen10@gmail.com")
+#
+# No default here on purpose: this project is public, and a hardcoded email
+# would mean every user who forgets to set their own env var sends SEC
+# requests identified as the maintainer. sec/client.py raises a clear error
+# at the point of an actual network call if this is unset — importing the
+# package (e.g. for tests against fixtures) still works with nothing set.
+SEC_USER_AGENT = os.environ.get("SEC_USER_AGENT")
 SEC_MIN_INTERVAL_SECONDS = 0.11  # ~9 req/s, under the SEC's stated limit
 
 SEC_CACHE_TTL_SECONDS = 24 * 3600
@@ -30,7 +36,7 @@ SEC_CACHE_TTL_SECONDS = 24 * 3600
 
 @dataclass(frozen=True)
 class Config:
-    sec_user_agent: str = SEC_USER_AGENT
+    sec_user_agent: str | None = SEC_USER_AGENT
     sec_cache_ttl_seconds: int = SEC_CACHE_TTL_SECONDS
     sec_min_interval_seconds: float = SEC_MIN_INTERVAL_SECONDS
     runway_lookback_quarters: int = 4
