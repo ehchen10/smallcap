@@ -53,6 +53,16 @@ NET_INCOME: list[tuple[str, str]] = [
     ("us-gaap", "ProfitLoss"),
 ]
 
+EPS_DILUTED: list[tuple[str, str]] = [
+    ("us-gaap", "EarningsPerShareDiluted"),
+    ("us-gaap", "EarningsPerShareBasicAndDiluted"),
+    ("us-gaap", "EarningsPerShareBasic"),
+]
+
+GROSS_PROFIT: list[tuple[str, str]] = [
+    ("us-gaap", "GrossProfit"),
+]
+
 # Most filers never report this tag at all — that's expected (no restructuring
 # activity), not a data gap, so callers should treat "not found" as "clean",
 # unlike CASH/OPERATING_CASH_FLOW where absence means something's wrong.

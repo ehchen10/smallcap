@@ -346,3 +346,45 @@ above, not just shape checks.
 than trusting the docstrings: it asserts no `update_thesis`/`delete_thesis`
 symbol exists, that no creation function's signature accepts a `created_at`,
 and that `revise()` leaves the parent's raw JSONL line byte-identical.
+
+
+## Always-on screener (`smallcap watch`)
+
+A daemon does the math continuously (no tokens); a Claude Code session on the
+same machine occasionally reads a small digest and steers. Scope: tech and
+biomedical filers (by SEC SIC code; `sectors` knob). Idea generator only.
+
+```
+git clone https://github.com/ehchen10/smallcap && cd smallcap
+bash deploy/install.sh                  # venv + pip install -e . + systemd user unit
+nano .env                               # set SEC_USER_AGENT="smallcap you@example.com"
+systemctl --user daemon-reload && systemctl --user enable --now smallcap-watch
+sudo loginctl enable-linger "$USER"     # survive logout/reboot
+claude                                  # in the repo, then:  /loop follow STEERING.md
+```
+
+State is plain files in `$SMALLCAP_DATA_DIR/watch` (default `data_store/watch`):
+`screens.json` (thresholds), `flags.jsonl`, `digest.md`, `state.json`,
+`changes.jsonl` (audit log of every threshold change), `notes.md`.
+
+| command | what |
+|---|---|
+| `smallcap watch run [--once]` | the daemon (what systemd runs) |
+| `smallcap watch digest` / `ack` | unacked flags or `NO_CHANGE`; mark reviewed |
+| `smallcap watch set KEY VALUE --reason "..."` | validated, audit-logged threshold change |
+| `smallcap watch pin/unpin TICKER`, `status`, `dive TICKER` | watchlist, state, ~15-line deep dive |
+| `smallcap watch mark TICKER candidate\|active\|park\|drop --note "..."` | set tier, snapshot metrics, clear triggers |
+| `smallcap watch review` | the file to check weekly (`watch/review.md`) |
+
+Each cycle: universe-wide frames screen (runway, cash) -> SIC sector filter ->
+split-checked dilution + P/E on survivors -> new-filing events for the watchlist.
+The first cycle takes a few minutes (SIC lookups are cached forever after).
+Runway uses the latest instant cash vs. last full-year operating cash flow, so
+it can lag — use `watch dive` / `smallcap runway` before trusting a name.
+
+**Review loop.** Raw flags -> Claude dives and marks the interesting ones `candidate`
+-> you decide `active` (cap 15) / `park` / `drop` in `watch/review.md`. Parked names
+cost nothing until they change (new 10-K/10-Q, runway/P/E moves >20% vs the snapshot taken
+when you marked them, new going-concern language, notable 8-K items, insider buy cluster),
+and parked names with no trigger for 12 months are dropped. Dropped names can re-enter the
+screen after 6 months. Review effort scales with changes, not with list size.

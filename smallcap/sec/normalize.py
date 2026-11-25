@@ -73,15 +73,23 @@ def discrete_quarters(facts: Iterable[Fact]) -> list[tuple[str, float]]:
             continue
         by_start.setdefault(fact["start"], []).append(fact)
 
-    quarters: list[tuple[str, float]] = []
+    # Income-statement concepts are filed both as YTD-cumulative facts and as
+    # standalone 3-month facts (different ``start``, same ``end``). Keep one
+    # value per end date, preferring the filer's own shortest-span fact: it's
+    # the reported discrete quarter, whereas a de-cumulated YTD difference is
+    # derived (and non-additive for per-share data like EPS).
+    best: dict[str, tuple[int, float]] = {}
     for group in by_start.values():
         group_sorted = sorted(group, key=lambda f: f["end"])
         prior = 0.0
         for fact in group_sorted:
-            quarters.append((fact["end"], fact["val"] - prior))
+            span = (date.fromisoformat(fact["end"]) - date.fromisoformat(fact["start"])).days
+            cur = best.get(fact["end"])
+            if cur is None or span < cur[0]:
+                best[fact["end"]] = (span, fact["val"] - prior)
             prior = fact["val"]
 
-    return sorted(quarters, key=lambda q: q[0])
+    return sorted(((e, v) for e, (_, v) in best.items()), key=lambda q: q[0])
 
 
 def ttm(quarters: list[tuple[str, float]], n: int = 4) -> float | None:

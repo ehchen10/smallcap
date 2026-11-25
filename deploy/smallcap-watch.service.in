@@ -1,0 +1,17 @@
+[Unit]
+Description=smallcap always-on screener (idea generator only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+EnvironmentFile=@REPO@/.env
+ExecStart=@REPO@/.venv/bin/smallcap watch run
+Restart=always
+RestartSec=60
+# One cycle can take a few minutes on the first run; SIGTERM lets it finish the sleep cleanly.
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

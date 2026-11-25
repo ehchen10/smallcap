@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 
-from smallcap import charts, dilution, quality, runway, screener
+from smallcap import charts, dilution, quality, runway, screener, watch as watch_mod
 from smallcap.charts import dilution_chart
 from smallcap.journal import alerts as alerts_mod
 from smallcap.journal import scorecard as scorecard_mod
@@ -36,6 +36,8 @@ filing_app = typer.Typer(add_completion=False, help="10-K/10-Q filing text.")
 app.add_typer(filing_app, name="filing")
 insider_app = typer.Typer(add_completion=False, help="Form 4 insider transactions.")
 app.add_typer(insider_app, name="insider")
+watch_app = typer.Typer(add_completion=False, help="Always-on screener daemon + digest for a steering Claude session.")
+app.add_typer(watch_app, name="watch")
 
 
 @app.command(name="runway")
@@ -103,19 +105,8 @@ def quality_cmd(ticker: str, refresh: bool = typer.Option(False, "--refresh", he
             typer.echo(f"  ! reported {r.consecutive_years} consecutive fiscal years — check whether 'one-time' still applies")
 
 
-def _default_annual_periods() -> tuple[str, str]:
-    """Most recent full calendar year likely to have complete 10-K coverage,
-    and the year before it, for the year-over-year dilution comparison."""
-    today = date.today()
-    last_full_year = today.year - 1 if today.month >= 4 else today.year - 2
-    return f"CY{last_full_year}", f"CY{last_full_year - 1}"
-
-
-def _default_instant_period() -> str:
-    today = date.today()
-    q = (today.month - 1) // 3  # 0-3, previous completed quarter index roughly
-    year, quarter = (today.year, q) if q > 0 else (today.year - 1, 4)
-    return f"CY{year}Q{quarter}I"
+_default_annual_periods = screener.default_annual_periods
+_default_instant_period = screener.default_instant_period
 
 
 @app.command()
@@ -535,3 +526,89 @@ def journal_scorecard(show_pnl: bool = typer.Option(False, "--show-pnl", help="I
 
 if __name__ == "__main__":
     app()
+
+
+@watch_app.command("run")
+def watch_run(once: bool = typer.Option(False, "--once", help="Run a single cycle and exit.")):
+    """Run the watcher loop (what the systemd service runs). Idea generator only."""
+    watch_mod.run_forever(once=once)
+
+
+@watch_app.command("digest")
+def watch_digest():
+    """Print unacked flags, or NO_CHANGE. The cheap check a steering session runs first."""
+    typer.echo(watch_mod.render_digest())
+
+
+@watch_app.command("ack")
+def watch_ack():
+    """Mark the current digest as reviewed."""
+    watch_mod.ack()
+    typer.echo("acked")
+
+
+@watch_app.command("set")
+def watch_set(
+    key: str,
+    value: str = typer.Argument(..., help='JSON value: 1.5, null, ["tech"], ["8-K","10-Q"].'),
+    reason: str = typer.Option(..., "--reason", help="Why — logged to changes.jsonl."),
+):
+    """Change one screen threshold (validated and audit-logged)."""
+    try:
+        old, new = watch_mod.set_screen(key, watch_mod.parse_value(value), reason)
+    except watch_mod.ScreenError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"{key}: {old} -> {new}")
+
+
+@watch_app.command("pin")
+def watch_pin(ticker: str):
+    """Always watch this ticker's filings, regardless of screen hits."""
+    cur = watch_mod.load_screens()["pinned"]
+    watch_mod.set_screen("pinned", sorted({*cur, ticker.upper()}), f"pin {ticker.upper()}")
+    typer.echo(f"pinned: {ticker.upper()}")
+
+
+@watch_app.command("unpin")
+def watch_unpin(ticker: str):
+    cur = watch_mod.load_screens()["pinned"]
+    watch_mod.set_screen("pinned", [t for t in cur if t != ticker.upper()], f"unpin {ticker.upper()}")
+    typer.echo(f"unpinned: {ticker.upper()}")
+
+
+@watch_app.command("status")
+def watch_status():
+    """Last cycle time, flag counts, and current screens."""
+    state = watch_mod.load_state()
+    counts = {k: sum(1 for r in watch_mod.load_tiers().values() if r["tier"] == k) for k in watch_mod.TIERS}
+    typer.echo(f"last cycle: {state['last_cycle']}  unacked flags: {len(watch_mod.unacked_flags())}  tiers: {counts}")
+    for k, v in sorted(watch_mod.load_screens().items()):
+        typer.echo(f"  {k} = {v}")
+
+
+@watch_app.command("dive")
+def watch_dive(ticker: str):
+    """Compact deep dive on one ticker (~15 lines)."""
+    typer.echo(watch_mod.dive(ticker))
+
+
+@watch_app.command("mark")
+def watch_mark(
+    ticker: str,
+    tier: str = typer.Argument(..., help="candidate | active | park | drop"),
+    note: str = typer.Option("", "--note", help="Verdict / why."),
+):
+    """Set a name's tier, snapshot its metrics, clear its pending triggers."""
+    try:
+        rec = watch_mod.mark_ticker(ticker, tier, note)
+    except watch_mod.ScreenError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"{ticker.upper()} -> {tier}  ({watch_mod._fmt_snap(rec['snapshot'])})")
+
+
+@watch_app.command("review")
+def watch_review():
+    """Print the review (also kept current in watch/review.md): candidates, changed names, active list."""
+    typer.echo(watch_mod.render_review())

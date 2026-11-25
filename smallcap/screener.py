@@ -21,6 +21,7 @@ idea-generator, not the precision path (use runway.py per-ticker for that).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 from smallcap import prices
 from smallcap.sec import client, concepts
@@ -50,6 +51,21 @@ class ScreenResult:
     period_annual_start: str
 
 
+def default_annual_periods() -> tuple[str, str]:
+    """Most recent full calendar year likely to have complete 10-K coverage,
+    and the year before it, for the year-over-year dilution comparison."""
+    today = date.today()
+    last_full_year = today.year - 1 if today.month >= 4 else today.year - 2
+    return f"CY{last_full_year}", f"CY{last_full_year - 1}"
+
+
+def default_instant_period() -> str:
+    today = date.today()
+    q = (today.month - 1) // 3  # 0-3, previous completed quarter index roughly
+    year, quarter = (today.year, q) if q > 0 else (today.year - 1, 4)
+    return f"CY{year}Q{quarter}I"
+
+
 def _first_present(chain: list[tuple[str, str]]) -> tuple[str, str]:
     return chain[0]
 
@@ -68,10 +84,15 @@ def screen(
     annual_start_period: str,
     max_runway_years: float | None = None,
     max_dilution_pct: float | None = None,
+    check_splits: bool = True,
     refresh: bool = False,
 ) -> ScreenResult:
     """``instant_period`` e.g. "CY2025Q1I"; annual periods e.g. "CY2024"/"CY2023"
-    (used to compute year-over-year dilution on shares outstanding)."""
+    (used to compute year-over-year dilution on shares outstanding).
+
+    ``check_splits=False`` skips the per-ticker yfinance split lookup and leaves
+    dilution unset — a cheap frames-only pass for universe-wide prefiltering
+    (runway/cash), to be followed by a full pass on the survivors."""
     tmap = client.ticker_map(refresh=refresh)
     wanted = {t.upper(): tmap[t.upper()] for t in tickers if t.upper() in tmap}
 
@@ -108,7 +129,7 @@ def screen(
 
         dilution_pct = None
         dilution_suspect = False
-        if s_end and s_start:
+        if check_splits and s_end and s_start:
             # `frames` gives one pre-selected fact per (cik, period) with no
             # control over which filing it came from — and SEC retroactively
             # restates comparative-period share counts after a split, so the

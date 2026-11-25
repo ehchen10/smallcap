@@ -19,6 +19,8 @@ FOLLOWUPS_PATH = JOURNAL_DIR / "followups.jsonl"
 TRADES_PATH = JOURNAL_DIR / "trades.jsonl"
 NOTES_PATH = JOURNAL_DIR / "notes.jsonl"
 
+WATCH_DIR = DATA_DIR / "watch"
+
 # SEC requires a real identifying User-Agent ("name email") on every request
 # and asks that you stay under ~10 req/s. See
 # https://www.sec.gov/os/webmaster-faq#developers
@@ -49,5 +51,5 @@ CONFIG = Config()
 
 
 def ensure_dirs() -> None:
-    for d in (DATA_DIR, SEC_CACHE_DIR, CHARTS_DIR, JOURNAL_DIR):
+    for d in (DATA_DIR, SEC_CACHE_DIR, CHARTS_DIR, JOURNAL_DIR, WATCH_DIR):
         d.mkdir(parents=True, exist_ok=True)

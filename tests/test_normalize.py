@@ -84,3 +84,24 @@ def test_annual_totals_filters_to_full_year_spans():
     ]
     annual = normalize.annual_totals(facts)
     assert annual == [("2023-12-31", 40)]
+
+
+def test_discrete_quarters_one_value_per_end_when_3mo_and_ytd_coexist():
+    """Income-statement concepts are filed as both YTD and standalone 3-month
+    facts. Regression: this used to return two entries for the same quarter end
+    (inflating TTM sums). The filer's own 3-month fact must win."""
+
+    def fact(start, end, val, accn):
+        return {"start": start, "end": end, "val": val, "filed": end, "accn": accn, "form": "10-Q"}
+
+    facts = [
+        fact("2025-01-01", "2025-03-31", 10.0, "a"),  # Q1 (YTD == 3mo)
+        fact("2025-01-01", "2025-06-30", 25.0, "b"),  # H1 YTD
+        fact("2025-04-01", "2025-06-30", 15.0, "b"),  # Q2 standalone
+        fact("2025-01-01", "2025-09-30", 45.0, "c"),  # 9M YTD
+        fact("2025-07-01", "2025-09-30", 20.0, "c"),  # Q3 standalone
+    ]
+    q = normalize.discrete_quarters(normalize.dedup(facts))
+    assert [e for e, _ in q] == ["2025-03-31", "2025-06-30", "2025-09-30"]
+    assert [v for _, v in q] == [10.0, 15.0, 20.0]
+    assert normalize.ttm(q, 3) == 45.0
